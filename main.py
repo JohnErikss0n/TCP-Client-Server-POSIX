@@ -1,9 +1,7 @@
-import cryptography
 from cryptography.fernet import Fernet
 import socket
 import argparse
 import sys
-import math
 
 class Server:
 
@@ -19,10 +17,6 @@ class Server:
         self.create_listen_socket()
         self.process_connections_forever()
 
-    def import_student_database(self):
-        """Read and process the student database."""
-        self.read_and_clean_database_records()
-        self.parse_student_records()
 
     def read_and_clean_database_records(self):
         """Read and clean database records from a file."""
@@ -41,7 +35,7 @@ class Server:
 
 
         keys = lines.pop(0).split(',')
-        db = {}
+        db = {} #{student_num : {mt1: 2,mt2:1 ,...)
         for student_data in lines:
             student_data_list = student_data.split(',')
             student_dict = {}
@@ -233,7 +227,7 @@ class Client:
         while True:
             self.input_text = input("Input: ")
             if self.input_text != "":
-                self.student_id = self.input_text.split()[0]
+                self.student_id = self.input_text.strip().split()[0]
                 break
 
     def send_console_input_forever(self):
