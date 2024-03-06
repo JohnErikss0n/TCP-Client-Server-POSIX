@@ -3,6 +3,26 @@ import socket
 import argparse
 import sys
 
+commands_cols = {
+    "GMA": 'Midterm',
+    "GEA": "Exam",
+    "GL1A": "Lab 1",
+    "GL2A": "Lab 2",
+    "GL3A": "Lab 3",
+    "GL4A": "Lab 4",
+    "GG": None
+}
+
+command_msgs = {
+    "GMA": 'Fetching midterm average: ',
+    "GEA": "Fetching exams average: ",
+    "GL1A": "Fetching lab 1 average: ",
+    "GL2A": "Fetching lab 2 average: ",
+    "GL3A": "Fetching lab 3 average: ",
+    "GL4A": "Fetching lab 4 average: ",
+    "GG": "Getting Grades: "
+}
+
 class Server:
 
     def __init__(self):
@@ -17,7 +37,6 @@ class Server:
         self.create_listen_socket()
         self.process_connections_forever()
 
-
     def read_and_clean_database_records(self):
         """Read and clean database records from a file."""
         db_file = "course_grades_2024.csv"
@@ -28,22 +47,22 @@ class Server:
             print(f"Database not found, creating: {db_file}")
             lines = []
 
-
         print("Data read from CSV file: ")
         for line in lines:
             print(line)
+        print()
 
-
+        # column titles
         keys = lines.pop(0).split(',')
-        db = {} #{student_num : {mt1: 2,mt2:1 ,...)
+        db = {}  # root dictionary
         for student_data in lines:
             student_data_list = student_data.split(',')
-            student_dict = {}
-            id = student_data_list[1]
+            student_dict = {}  # sub dictionary
+            id = student_data_list[1]  # student id
             for i in range(len(student_data_list)):
-                if i!=1:
+                if i != 1:  # skip the id
                     student_dict[keys[i]] = student_data_list[i]
-            db[id] = student_dict
+            db[id] = student_dict  # {id: student{}}
         return db
 
     def create_listen_socket(self):
@@ -60,7 +79,7 @@ class Server:
 
             # Set socket to listen state.
             self.socket.listen(self.MAX_CONNECTION_BACKLOG)
-            print("Listening on port {} ...".format(self.PORT))
+            print(f"Listening on port {self.PORT} ...")
         except Exception as msg:
             print(msg)
             sys.exit(1)
@@ -79,92 +98,74 @@ class Server:
         except KeyboardInterrupt:
             print()
         finally:
-            # If something bad happens, make sure that we close the
-            # socket.
+            # If something bad happens, make sure that we close the socket.
             self.socket.close()
+            print("Server shut down.")
             sys.exit(1)
 
     def connection_handler(self, client):
         # Unpack the client socket address tuple.
         connection, address_port = client
+        address, port = address_port
         print("-" * 72)
-        print("Connection received from {}.".format(address_port))
         # Output the socket address.
-        print(client)
+        print(f"Connection received from {address} on port{port}.")
 
         while True:
             try:
                 recvd_bytes = connection.recv(self.RECV_BUFFER_SIZE)
 
                 if len(recvd_bytes) == 0:
-                    print("Closing client connection ... ")
                     connection.close()
+                    print("Client connection closed.")
                     break
 
                 recvd_str = recvd_bytes.decode("utf-8")
-                print("Received: ", recvd_str)
                 recvd_str = recvd_str.strip().split()
-                id_num, command = recvd_str[0],recvd_str[1]
+                id_num, command = recvd_str[0], recvd_str[1]
+                print(f"Received: {command} command from client.")
 
+                #
+                if self.db.get(id_num) is None:
+                    print("User not found.")
+                    connection.close()
+                    print("Client connection closed.")
+                    break
+                print("User found.")
+                student = self.db[id_num]
+                encryption_key = student['Key']
 
-
-                encryption_key = self.db[id_num]['Key']
-
-
-
-                commands = {
-                    "GMA": 'Midterm',
-                    "GEA": "Exam",
-                    "GL1A": "Lab 1" ,
-                    "GL2A": "Lab 2",
-                    "GL3A": "Lab 3",
-                    "GL4A": "Lab 4",
-                    "GG": None
-                }
-                command_mapped = commands[command]
-                result = "Error, command not recognized"
-
-                if command not in commands.keys():
-                    print("Error, command not recognized")
-                elif command == "GG":
-                    record = self.db[id_num]
-                    command_strings = [f"{key}: {value}" for key, value in record.items()]
+                column = commands_cols[command]
+                if command == "GG":
+                    record_strings = [f"{key}: {value}" for key, value in student.items()]
                     # Joining the list into a single string, separated by commas
-                    joined_string = ", ".join(command_strings)
-                    result = joined_string
+                    result = ", ".join(record_strings)
                 elif command == "GEA":
                     grades = []
-
-                    for key in self.db:
-                        for i in range(1,5):
-                            print(key+' '+str(i))
-                            grades.append(float(self.db[key][command_mapped+' '+str(i)]))
-                    result = command_mapped+ ' average: '+str(sum(grades)/len(grades))
-
+                    for record in self.db.values():
+                        for i in range(1, 5):
+                            grades.append(float(record[column + ' ' + str(i)]))
+                    result = column + ' average: ' + str(sum(grades) / len(grades))
                 else:
                     grades = []
-                    for key in self.db:
-                        grades.append(float(self.db[key][command_mapped]))
-                    result = command_mapped+ ' average: '+str(sum(grades)/len(grades))
-
+                    for record in self.db.values():
+                        grades.append(float(record[column]))
+                    result = column + ' average: ' + str(sum(grades) / len(grades))
+                print("Sending: \n", result)
 
                 encryption_key_bytes = encryption_key.encode('utf-8')
-
                 message_bytes = result.encode('utf-8')
-
                 fernet = Fernet(encryption_key_bytes)
                 encrypted_message_bytes = fernet.encrypt(message_bytes)
                 connection.sendall(encrypted_message_bytes)
 
             except KeyboardInterrupt:
-                print()
-                print("Closing client connection ... ")
                 connection.close()
+                print("Client connection closed.")
                 break
 
 
 class Client:
-
     SERVER_HOSTNAME = "localhost"
     RECV_BUFFER_SIZE = 1024  # Used for recv.
     PORT = 50000
@@ -174,10 +175,9 @@ class Client:
         self.connect_to_server()
         self.db = self.read_and_clean_database_records()
 
-
         self.send_console_input_forever()
         self.student_id = 0
-
+        self.input_text = ""
 
     def read_and_clean_database_records(self):
         """Read and clean database records from a file."""
@@ -189,13 +189,11 @@ class Client:
             print(f"Database not found, creating: {db_file}")
             lines = []
 
-
-
-        keys = lines.pop(0).split(',')
         db = {}
         for student_data in lines:
             student_data_list = student_data.split(',')
-            db[student_data_list[1]] = student_data_list[2]
+            id, key = student_data_list[1], student_data_list[2]
+            db[id] = key
         return db
 
     def get_socket(self):
@@ -216,19 +214,10 @@ class Client:
         try:
             # Connect to the server using its socket address tuple.
             self.socket.connect((Client.SERVER_HOSTNAME, self.PORT))
-            print("Connected to \"{}\" on port {}".format(Client.SERVER_HOSTNAME, self.PORT))
+            print(f"Connected to \"{Client.SERVER_HOSTNAME}\" on port {Client.PORT}")
         except Exception as msg:
             print(msg)
             sys.exit(1)
-
-    def get_console_input(self):
-        # In this version we keep prompting the user until a non-blank
-        # line is entered, i.e., ignore blank lines.
-        while True:
-            self.input_text = input("Input: ")
-            if self.input_text != "":
-                self.student_id = self.input_text.strip().split()[0]
-                break
 
     def send_console_input_forever(self):
         while True:
@@ -238,11 +227,25 @@ class Client:
                 self.connection_receive()
             except (KeyboardInterrupt, EOFError):
                 print()
-                print("Closing server connection ...")
-                # If we get and error or keyboard interrupt, make sure
-                # that we close the socket.
+                # If we get and error or keyboard interrupt, make sure that we close the socket.
                 self.socket.close()
+                print("Server connection closed.")
                 sys.exit(1)
+
+    def get_console_input(self):
+        while True:
+            self.input_text = input("Input: ")
+            try:
+                id_num, command = self.input_text.strip().split()
+                command_msg = command_msgs.get(command)
+                if command_msg is not None:
+                    print(f"Command entered: {command}")
+                    print(command_msg)
+                    self.student_id = id_num
+                    break
+                print("Invalid command. Please try again.")
+            except Exception as e:
+                print("Error: ", e)
 
     def connection_send(self):
         try:
@@ -267,19 +270,21 @@ class Client:
                 print("Closing server connection ... ")
                 self.socket.close()
                 sys.exit(1)
-            encryption_key = self.db[self.student_id]
+            encryption_key = self.db[str(self.student_id)]
             encryption_key_bytes = encryption_key.encode('utf-8')
 
-            # Encrypt the message for transmission at the server.
+            # Decrypt the message from the server.
             fernet = Fernet(encryption_key_bytes)
             decrypted_message_bytes = fernet.decrypt(recvd_bytes)
             decrypted_message = decrypted_message_bytes.decode('utf-8')
 
-            print("Received: ", decrypted_message)
+            print(decrypted_message)
 
         except Exception as msg:
             print(msg)
             sys.exit(1)
+
+
 if __name__ == '__main__':
     roles = {'client': Client, 'server': Server}
     parser = argparse.ArgumentParser()
