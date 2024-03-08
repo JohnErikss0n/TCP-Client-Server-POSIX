@@ -109,7 +109,7 @@ class Server:
         address, port = address_port
         print("-" * 72)
         # Output the socket address.
-        print(f"Connection received from {address} on port{port}.")
+        print(f"Connection received from {address} on port {port}.")
 
         while True:
             try:
@@ -137,7 +137,9 @@ class Server:
 
                 column = commands_cols[command]
                 if command == "GG":
-                    record_strings = [f"{key}: {value}" for key, value in student.items()]
+                    # Exclude the key from the record
+                    record_strings = [f"{key}: {value}" for key, value in student.items() if key != 'Key']
+                    print(record_strings)
                     # Joining the list into a single string, separated by commas
                     result = ", ".join(record_strings)
                 elif command == "GEA":
@@ -234,7 +236,7 @@ class Client:
 
     def get_console_input(self):
         while True:
-            self.input_text = input("Input: ")
+            self.input_text = input("Please enter your student ID and a command: ")
             try:
                 id_num, command = self.input_text.strip().split()
                 command_msg = command_msgs.get(command)
