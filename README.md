@@ -1,2 +1,3 @@
-# 4DN4_lab1
+# TCP Service 
+Basic POSIX style CLI.
  
